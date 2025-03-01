@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Growth Rate Plot</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <h2>Specific Growth Rate Plot</h2>
+
+  <!-- Temperature selection -->
+  <div class="radio-container">
+    <p>Select Temperature:
+      <input type="radio" name="tempRadio" value="33" checked> 33°C
+      <input type="radio" name="tempRadio" value="37"> 37°C
+    </p>
+  </div>
+
+  <!-- Glucose slider -->
+  <div class="slider-container">
+    <p>Glucose Concentration:
+      <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2" oninput="updatePlot()">
+      <span id="glucoseValue">1.2</span> g/L
+    </p>
+  </div>
+
+  <!-- The generated plot -->
+  <img id="plotImage" 
+       src="{{ url_for('plot') }}?temp=33&glucose=1.2" 
+       alt="Growth Rate Plot">
+
+  <!-- Back to Home button -->
+  <p>
+    <button onclick="location.href='/'">Back to Home</button>
+  </p>
+
+  <script>
+    const slider   = document.getElementById('glucoseSlider');
+    const image    = document.getElementById('plotImage');
+    const gValue   = document.getElementById('glucoseValue');
+    const tempEls  = document.getElementsByName('tempRadio');
+
+    // Update the plot image whenever the slider or radio button changes
+    function updatePlot() {
+      let val = slider.value;
+      gValue.textContent = val;
+
+      let chosenTemp = '33';  // default
+      for (const el of tempEls) {
+        if (el.checked) {
+          chosenTemp = el.value;
+          break;
+        }
+      }
+
+      // Force a fresh URL so the browser doesn't cache the image
+      image.src = '{{ url_for("plot") }}?temp=' + chosenTemp + '&glucose=' + val + '&_=' + Date.now();
+    }
+
+    // Also respond when the user changes temperature
+    tempEls.forEach(el => el.addEventListener('change', updatePlot));
+  </script>
+</body>
+</html>
