@@ -8,7 +8,6 @@
 <body>
   <h2>Specific Growth Rate Plot</h2>
 
-  <!-- Temperature selection -->
   <div class="radio-container">
     <p>Select Temperature:
       <input type="radio" name="tempRadio" value="33" checked> 33°C
@@ -16,49 +15,76 @@
     </p>
   </div>
 
-  <!-- Glucose slider -->
   <div class="slider-container">
-    <p>Glucose Concentration:
+    <p>Glucose (g/L):
       <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2" oninput="updatePlot()">
-      <span id="glucoseValue">1.2</span> g/L
+      <span id="glucoseValue">1.2</span>
     </p>
   </div>
 
-  <!-- The generated plot -->
-  <img id="plotImage" 
-       src="{{ url_for('plot') }}?temp=33&glucose=1.2" 
-       alt="Growth Rate Plot">
+  <!-- New: Days dropdown -->
+  <div class="days-container">
+    <p>Number of Days to Grow:
+      <select id="daysDropdown" onchange="updatePlot()">
+        <option value="1" selected>1 day</option>
+        <option value="2">2 days</option>
+        <option value="3">3 days</option>
+        <option value="4">4 days</option>
+        <option value="5">5 days</option>
+      </select>
+    </p>
+  </div>
 
-  <!-- Back to Home button -->
+  <!-- The dynamic plot -->
+  <img id="plotImage" 
+       src="{{ url_for('plot') }}?temp=33&glucose=1.2&days=1" 
+       alt="Growth Rate Plot"
+       style="border:1px solid #ccc; margin-top:20px; max-width:100%;">
+
+  <!-- Back home -->
   <p>
     <button onclick="location.href='/'">Back to Home</button>
   </p>
 
   <script>
-    const slider   = document.getElementById('glucoseSlider');
-    const image    = document.getElementById('plotImage');
-    const gValue   = document.getElementById('glucoseValue');
-    const tempEls  = document.getElementsByName('tempRadio');
+    const tempRadios     = document.getElementsByName('tempRadio');
+    const glucoseSlider  = document.getElementById('glucoseSlider');
+    const glucoseValue   = document.getElementById('glucoseValue');
+    const daysDropdown   = document.getElementById('daysDropdown');
+    const plotImage      = document.getElementById('plotImage');
 
-    // Update the plot image whenever the slider or radio button changes
     function updatePlot() {
-      let val = slider.value;
-      gValue.textContent = val;
-
-      let chosenTemp = '33';  // default
-      for (const el of tempEls) {
-        if (el.checked) {
-          chosenTemp = el.value;
+      // 1) Which temperature?
+      let temp = '33';
+      for (const r of tempRadios) {
+        if (r.checked) {
+          temp = r.value;
           break;
         }
       }
 
-      // Force a fresh URL so the browser doesn't cache the image
-      image.src = '{{ url_for("plot") }}?temp=' + chosenTemp + '&glucose=' + val + '&_=' + Date.now();
+      // 2) Glucose from slider
+      let gVal = glucoseSlider.value;
+      glucoseValue.textContent = gVal;
+
+      // 3) Days from dropdown
+      let daysVal = daysDropdown.value;
+
+      // 4) Rebuild the image src with query params
+      // Add a random query param to avoid caching
+      plotImage.src = (
+        "{{ url_for('plot') }}" +
+        "?temp=" + temp +
+        "&glucose=" + gVal +
+        "&days=" + daysVal +
+        "&_=" + Date.now()
+      );
     }
 
-    // Also respond when the user changes temperature
-    tempEls.forEach(el => el.addEventListener('change', updatePlot));
+    // Also update on temp radio change
+    tempRadios.forEach(r => {
+      r.addEventListener('change', updatePlot);
+    });
   </script>
 </body>
 </html>
