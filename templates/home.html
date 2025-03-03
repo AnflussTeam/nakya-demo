@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Growth Rate Analysis</title>
+  <!-- Optionally link to a CSS file in /static/style.css -->
+</head>
+<body>
+  <h1>Growth Rate Analysis (No Upload Required)</h1>
+
+  <p>
+    Select Temperature:
+    <input type="radio" name="tempRadio" value="33" checked>33°C
+    <input type="radio" name="tempRadio" value="37">37°C
+  </p>
+
+  <p>
+    Glucose (g/L):
+    <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2" 
+           oninput="updatePlot()">
+    <span id="glucoseValue">1.2</span>
+  </p>
+
+  <p>
+    Number of Days:
+    <select id="daysDropdown" onchange="updatePlot()">
+      <option value="1" selected>1 day</option>
+      <option value="2">2 days</option>
+      <option value="3">3 days</option>
+      <option value="4">4 days</option>
+      <option value="5">5 days</option>
+    </select>
+  </p>
+
+  <p>
+    Initial Cell Count:
+    <input type="number" id="initialCountInput" value="1000000" min="1" step="100000"
+           oninput="updatePlot()" />
+    <small>(default 1×10^6)</small>
+  </p>
+
+  <!-- The dynamic plot -->
+  <img id="plotImage" 
+       src="/plot?temp=33&glucose=1.2&days=1&initial_count=1000000" 
+       style="border:1px solid #ccc; max-width:100%; margin-top:10px;" />
+
+  <script>
+    const tempRadios       = document.getElementsByName('tempRadio');
+    const glucoseSlider    = document.getElementById('glucoseSlider');
+    const glucoseValueSpan = document.getElementById('glucoseValue');
+    const daysDropdown     = document.getElementById('daysDropdown');
+    const initialCountElem = document.getElementById('initialCountInput');
+    const plotImage        = document.getElementById('plotImage');
+
+    // Update the plot whenever inputs change
+    function updatePlot() {
+      // 1) Which temperature?
+      let chosenTemp = '33';
+      for (const r of tempRadios) {
+        if (r.checked) {
+          chosenTemp = r.value;
+          break;
+        }
+      }
+
+      // 2) Glucose from slider
+      let gVal = glucoseSlider.value;
+      glucoseValueSpan.textContent = gVal;
+
+      // 3) Days from dropdown
+      let daysVal = daysDropdown.value;
+
+      // 4) Initial cell count
+      let initialCountVal = initialCountElem.value || '1000000';
+
+      // 5) Rebuild the image src with new query params
+      //    Add a random param to force fresh load (avoid caching).
+      let newSrc = `/plot?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}&initial_count=${initialCountVal}&_=${Date.now()}`;
+      plotImage.src = newSrc;
+    }
+
+    // Also update on radio changes
+    tempRadios.forEach(r => {
+      r.addEventListener('change', updatePlot);
+    });
+  </script>
+</body>
+</html>
