@@ -1,8 +1,8 @@
-from flask import Flask, render_template, request, send_file
-import numpy as np
+from flask import Flask, request, render_template, send_file
 import pandas as pd
+import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # non-GUI backend
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
 from scipy.optimize import curve_fit
@@ -10,18 +10,16 @@ from scipy.optimize import curve_fit
 app = Flask(__name__)
 
 ##################################
-# Hard-coded data & model setup
+# Hard-coded data & initial fits
 ##################################
-# Example data from your snippet
 DEFAULT_GLUCOSE = np.array([1.2, 2.4, 3.6, 4.8])
 MU_37 = np.array([0.0274, 0.0235, 0.0362, 0.041])  # hr^-1
 MU_33 = np.array([0.011, 0.022, 0.032, 0.035])     # hr^-1
 
 def log_func(x, a, b):
-    """Logarithmic model: mu = a ln(x) + b."""
+    """Logarithmic growth model: mu = a ln(x) + b."""
     return a * np.log(x) + b
 
-# Fit the curves just once at startup, store in global
 params_37, _ = curve_fit(log_func, DEFAULT_GLUCOSE, MU_37)
 params_33, _ = curve_fit(log_func, DEFAULT_GLUCOSE, MU_33)
 
@@ -29,29 +27,30 @@ params_33, _ = curve_fit(log_func, DEFAULT_GLUCOSE, MU_33)
 # Routes
 ##################################
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def home():
     """
-    Home page with:
-    - Radio for temperature,
-    - Slider for glucose,
-    - Dropdown for days,
-    - Text field for initial cell count,
-    - The dynamic plot (via <img>).
+    The home page shows:
+    - Temperature radio buttons,
+    - Glucose slider,
+    - Days dropdown,
+    - Initial cell count,
+    - Plot image,
+    - File upload form (AJAX) for refined curve fitting.
     """
     return render_template('home.html')
 
 @app.route('/plot')
 def plot():
     """
-    Generates the Matplotlib plot based on query parameters:
+    Generates a plot based on query params:
       ?temp=33 or ?temp=37
       &glucose=...
       &days=...
       &initial_count=...
+    Returns a PNG.
     """
-    # 1) Read query params (strings), convert to float
-    temp_str = request.args.get('temp', '33')  # '33' or '37'
+    temp_str = request.args.get('temp', '33')
     try:
         glucose_val = float(request.args.get('glucose', '1.2'))
     except ValueError:
@@ -67,33 +66,27 @@ def plot():
     except ValueError:
         initial_count = 1e6
 
-    # 2) Hours from days
     hours = days * 24.0
 
-    # 3) Pick parameters for the chosen temperature
+    # Evaluate mu
     if temp_str == '37':
-        mu = log_func(glucose_val, *params_37)  # hr^-1
+        mu = log_func(glucose_val, *params_37)
         color = 'red'
         label = '37°C Fit'
         scatter_vals = log_func(DEFAULT_GLUCOSE, *params_37)
     else:
-        mu = log_func(glucose_val, *params_33)  # hr^-1
+        mu = log_func(glucose_val, *params_33)
         color = 'orange'
         label = '33°C Fit'
         scatter_vals = log_func(DEFAULT_GLUCOSE, *params_33)
 
-    # 4) Compute final cell count after X days
-    #    log(X) = mu*t + log(X0) => X(t) = X0 exp(mu t)
     final_cell_count = initial_count * np.exp(mu * hours)
-
-    # 5) Estimate daily glucose needed (placeholder formula)
     daily_glucose_needed = final_cell_count * 1e-8
 
-    # 6) Generate the figure
+    # Plot
     fig, ax = plt.subplots(figsize=(5,4), dpi=100)
 
-    # For reference, plot the fitted curve across the range
-    x_vals = np.linspace(1, 5, 100)
+    x_vals = np.linspace(DEFAULT_GLUCOSE.min(), DEFAULT_GLUCOSE.max(), 100)
     if temp_str == '37':
         y_fit = log_func(x_vals, *params_37)
     else:
@@ -112,7 +105,7 @@ def plot():
     # Annotate chosen point
     ax.text(glucose_val + 0.1, mu, f"mu={mu:.4f}", color='blue')
 
-    # Info text box
+    # Info box
     info_text = (
         f"Days: {days:.1f}\n"
         f"Temp: {temp_str}°C\n"
@@ -125,7 +118,7 @@ def plot():
             va='top', ha='left', fontsize=9,
             bbox=dict(boxstyle='round', fc='white', ec='gray'))
 
-    # 7) Return figure as PNG
+    # Return as PNG
     buf = io.BytesIO()
     plt.tight_layout()
     plt.savefig(buf, format='png')
@@ -134,6 +127,27 @@ def plot():
 
     return send_file(buf, mimetype='image/png')
 
-# Run the dev server
+@app.route('/upload', methods=['POST'])
+def upload():
+    """
+    AJAX endpoint to read the file, ensuring it's valid.
+    Return a success message WITHOUT redirecting.
+    """
+    excel_file = request.files.get('excel_file')
+    if not excel_file:
+        return "No file chosen. Please select a file.", 400
+
+    # Just read it to confirm it's valid; not used further.
+    try:
+        df = pd.read_excel(excel_file)
+        # If we wanted to do more, we would parse & re-fit here
+    except Exception as e:
+        return f"Error reading file: {e}", 400
+
+    return "File submitted successfully!", 200
+
+################################
+# Run dev server
+################################
 if __name__ == '__main__':
     app.run(debug=True)

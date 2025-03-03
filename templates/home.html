@@ -3,24 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <title>Growth Rate Analysis</title>
-  <!-- Optionally link to a CSS file in /static/style.css -->
 </head>
 <body>
-  <h1>Growth Rate Analysis (No Upload Required)</h1>
+  <h1>Growth Rate Analysis</h1>
 
+  <!-- 1) Temperature -->
   <p>
     Select Temperature:
     <input type="radio" name="tempRadio" value="33" checked>33°C
     <input type="radio" name="tempRadio" value="37">37°C
   </p>
 
+  <!-- 2) Glucose slider -->
   <p>
     Glucose (g/L):
-    <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2" 
+    <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2"
            oninput="updatePlot()">
     <span id="glucoseValue">1.2</span>
   </p>
 
+  <!-- 3) Number of days -->
   <p>
     Number of Days:
     <select id="daysDropdown" onchange="updatePlot()">
@@ -32,6 +34,7 @@
     </select>
   </p>
 
+  <!-- 4) Initial cell count -->
   <p>
     Initial Cell Count:
     <input type="number" id="initialCountInput" value="1000000" min="1" step="100000"
@@ -39,10 +42,23 @@
     <small>(default 1×10^6)</small>
   </p>
 
-  <!-- The dynamic plot -->
-  <img id="plotImage" 
-       src="/plot?temp=33&glucose=1.2&days=1&initial_count=1000000" 
-       style="border:1px solid #ccc; max-width:100%; margin-top:10px;" />
+  <!-- 5) Dynamic Plot -->
+  <img id="plotImage"
+       src="/plot?temp=33&glucose=1.2&days=1&initial_count=1000000"
+       style="border:1px solid #ccc; max-width:100%;"
+       alt="Growth Rate Plot">
+
+  <br><br>
+
+  <!-- 6) Upload file for refined curve fitting (AJAX) -->
+  <h3>Upload File for Refined Curve Fitting (Optional)</h3>
+  <form id="uploadForm" method="POST" enctype="multipart/form-data">
+    <input type="file" name="excel_file" />
+    <button type="submit">Submit File</button>
+  </form>
+
+  <!-- Area to show upload status -->
+  <p id="uploadStatus" style="color: green; font-weight: bold;"></p>
 
   <script>
     const tempRadios       = document.getElementsByName('tempRadio');
@@ -51,10 +67,11 @@
     const daysDropdown     = document.getElementById('daysDropdown');
     const initialCountElem = document.getElementById('initialCountInput');
     const plotImage        = document.getElementById('plotImage');
+    const uploadForm       = document.getElementById('uploadForm');
+    const uploadStatus     = document.getElementById('uploadStatus');
 
-    // Update the plot whenever inputs change
+    // 1) Update the plot whenever inputs change
     function updatePlot() {
-      // 1) Which temperature?
       let chosenTemp = '33';
       for (const r of tempRadios) {
         if (r.checked) {
@@ -63,25 +80,48 @@
         }
       }
 
-      // 2) Glucose from slider
       let gVal = glucoseSlider.value;
       glucoseValueSpan.textContent = gVal;
 
-      // 3) Days from dropdown
       let daysVal = daysDropdown.value;
 
-      // 4) Initial cell count
       let initialCountVal = initialCountElem.value || '1000000';
 
-      // 5) Rebuild the image src with new query params
-      //    Add a random param to force fresh load (avoid caching).
+      // Force fresh image so it won't cache
       let newSrc = `/plot?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}&initial_count=${initialCountVal}&_=${Date.now()}`;
       plotImage.src = newSrc;
     }
 
-    // Also update on radio changes
-    tempRadios.forEach(r => {
-      r.addEventListener('change', updatePlot);
+    // 2) Respond to radio changes
+    tempRadios.forEach(radio => {
+      radio.addEventListener('change', updatePlot);
+    });
+
+    // 3) AJAX file upload
+    uploadForm.addEventListener('submit', function(event) {
+      event.preventDefault();  // don't do a normal POST form submission
+
+      // Build a FormData object
+      const formData = new FormData(uploadForm);
+
+      // Send it via fetch to /upload
+      fetch('/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(async response => {
+        const message = await response.text();
+        if (response.ok) {
+          uploadStatus.style.color = 'green';
+        } else {
+          uploadStatus.style.color = 'red';
+        }
+        uploadStatus.textContent = message;
+      })
+      .catch(error => {
+        uploadStatus.style.color = 'red';
+        uploadStatus.textContent = 'Error: ' + error;
+      });
     });
   </script>
 </body>
