@@ -36,7 +36,7 @@ days = 1.0             # 1 day of culture
 hours = days * 24.0    # convert days to hours
 
 # Pick a range of glucose values to evaluate:
-glucose_range = np.linspace(0.5, 5.0, 10)
+glucose_range = np.arange(0.5, 5.1, 0.1)
 
 # Prepare lists to hold results
 temp_list = []
