@@ -5,6 +5,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import io
+import yaml
 from scipy.optimize import curve_fit
 
 app = Flask(__name__)
@@ -12,9 +13,12 @@ app = Flask(__name__)
 ##################################
 # Hard-coded data & initial fits
 ##################################
-DEFAULT_GLUCOSE = np.array([1.2, 2.4, 3.6, 4.8])
-MU_37 = np.array([0.0274, 0.0235, 0.0362, 0.041])  # hr^-1
-MU_33 = np.array([0.011, 0.022, 0.032, 0.035])     # hr^-1
+with open("config.yml", "r") as file:
+    config = yaml.safe_load(file)
+
+DEFAULT_GLUCOSE = np.array(config["default_glucose"])
+MU_37 = np.array(config["mu_37"])
+MU_33 = np.array(config["mu_33"])
 
 def log_func(x, a, b):
     """Logarithmic growth model: mu = a ln(x) + b."""
@@ -149,5 +153,6 @@ def upload():
 ################################
 # Run dev server
 ################################
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)
+

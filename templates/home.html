@@ -3,63 +3,153 @@
 <head>
   <meta charset="UTF-8">
   <title>Growth Rate Analysis</title>
+  <style>
+    /* Make the body dark and center all content */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #000; /* black background */
+      color: #fff;            /* white text */
+      margin: 0;
+      padding: 0;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh; 
+      text-align: center;
+      position: relative; /* important if you want absolute-positioned elements inside */
+    }
+
+    /* Logo styling: absolute position in top-left corner */
+    .logo {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 120px; /* Adjust as needed */
+      height: auto;
+    }
+
+    /* Headings */
+    h1, h2 {
+      margin-bottom: 10px;
+    }
+
+    /* Container around file-upload elements (optional) */
+    .upload-container {
+      background-color: #333;
+      border: 1px solid #444;
+      padding: 16px;
+      border-radius: 4px;
+      width: 300px;
+      margin: 20px auto;
+    }
+
+    /* Element spacing */
+    .radio-container,
+    .slider-container,
+    .days-container {
+      margin-bottom: 16px;
+    }
+
+    /* Slider (range) */
+    input[type="range"] {
+      width: 300px;
+      margin-left: 8px;
+    }
+
+    /* Buttons */
+    input[type="submit"],
+    button {
+      background-color: #5c90d2;
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    input[type="submit"]:hover,
+    button:hover {
+      background-color: #4375ab;
+    }
+
+    #uploadStatus {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+  </style>
 </head>
 <body>
+  <!-- LOGO - top left corner -->
+  <!-- If using Flask's url_for, do: src="{{ url_for('static', filename='images/logo.png') }}" -->
+  <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="logo">
+
+
+
   <h1>Growth Rate Analysis</h1>
 
   <!-- 1) Temperature -->
-  <p>
-    Select Temperature:
-    <input type="radio" name="tempRadio" value="33" checked>33°C
-    <input type="radio" name="tempRadio" value="37">37°C
-  </p>
+  <div class="radio-container">
+    <p>Select Temperature:</p>
+    <label>
+      <input type="radio" name="tempRadio" value="33" checked> 33°C
+    </label>
+    <label style="margin-left:1em;">
+      <input type="radio" name="tempRadio" value="37"> 37°C
+    </label>
+  </div>
 
   <!-- 2) Glucose slider -->
-  <p>
-    Glucose (g/L):
-    <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2"
-           oninput="updatePlot()">
-    <span id="glucoseValue">1.2</span>
-  </p>
+  <div class="slider-container">
+    <p>
+      Glucose (g/L):
+      <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2" oninput="updatePlot()">
+      <span id="glucoseValue">1.2</span>
+    </p>
+  </div>
 
   <!-- 3) Number of days -->
-  <p>
-    Number of Days:
-    <select id="daysDropdown" onchange="updatePlot()">
-      <option value="1" selected>1 day</option>
-      <option value="2">2 days</option>
-      <option value="3">3 days</option>
-      <option value="4">4 days</option>
-      <option value="5">5 days</option>
-    </select>
-  </p>
+  <div class="days-container">
+    <p>Number of Days:
+      <select id="daysDropdown" onchange="updatePlot()">
+        <option value="1" selected>1 day</option>
+        <option value="2">2 days</option>
+        <option value="3">3 days</option>
+        <option value="4">4 days</option>
+        <option value="5">5 days</option>
+      </select>
+    </p>
+  </div>
 
   <!-- 4) Initial cell count -->
-  <p>
-    Initial Cell Count:
-    <input type="number" id="initialCountInput" value="1000000" min="1" step="100000"
-           oninput="updatePlot()" />
-    <small>(default 1×10^6)</small>
-  </p>
+  <div>
+    <p>
+      Initial Cell Count:
+      <input type="number" id="initialCountInput" value="1000000" min="1" step="100000" oninput="updatePlot()" />
+      <small>(default 1×10^6)</small>
+    </p>
+  </div>
 
   <!-- 5) Dynamic Plot -->
   <img id="plotImage"
        src="/plot?temp=33&glucose=1.2&days=1&initial_count=1000000"
-       style="border:1px solid #ccc; max-width:100%;"
+       style="border:1px solid #ccc; max-width:80%;"
        alt="Growth Rate Plot">
 
   <br><br>
 
   <!-- 6) Upload file for refined curve fitting (AJAX) -->
-  <h3>Upload File for Refined Curve Fitting (Optional)</h3>
-  <form id="uploadForm" method="POST" enctype="multipart/form-data">
-    <input type="file" name="excel_file" />
-    <button type="submit">Submit File</button>
-  </form>
+  <div class="upload-container">
+    <h3>Upload File (Optional)</h3>
+    <form id="uploadForm" method="POST" enctype="multipart/form-data">
+      <input type="file" name="excel_file" />
+      <button type="submit">Submit File</button>
+    </form>
+    <p id="uploadStatus"></p>
+  </div>
 
-  <!-- Area to show upload status -->
-  <p id="uploadStatus" style="color: green; font-weight: bold;"></p>
-
+  <!-- JavaScript -->
   <script>
     const tempRadios       = document.getElementsByName('tempRadio');
     const glucoseSlider    = document.getElementById('glucoseSlider');
@@ -70,7 +160,6 @@
     const uploadForm       = document.getElementById('uploadForm');
     const uploadStatus     = document.getElementById('uploadStatus');
 
-    // 1) Update the plot whenever inputs change
     function updatePlot() {
       let chosenTemp = '33';
       for (const r of tempRadios) {
@@ -79,12 +168,10 @@
           break;
         }
       }
-
       let gVal = glucoseSlider.value;
       glucoseValueSpan.textContent = gVal;
 
       let daysVal = daysDropdown.value;
-
       let initialCountVal = initialCountElem.value || '1000000';
 
       // Force fresh image so it won't cache
@@ -92,19 +179,15 @@
       plotImage.src = newSrc;
     }
 
-    // 2) Respond to radio changes
+    // Recompute plot if the radio is switched
     tempRadios.forEach(radio => {
       radio.addEventListener('change', updatePlot);
     });
 
-    // 3) AJAX file upload
+    // AJAX file upload
     uploadForm.addEventListener('submit', function(event) {
-      event.preventDefault();  // don't do a normal POST form submission
-
-      // Build a FormData object
+      event.preventDefault();
       const formData = new FormData(uploadForm);
-
-      // Send it via fetch to /upload
       fetch('/upload', {
         method: 'POST',
         body: formData
