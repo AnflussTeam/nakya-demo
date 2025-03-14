@@ -4,38 +4,33 @@
   <meta charset="UTF-8">
   <title>Growth Rate Analysis</title>
   <style>
-    /* Make the body dark and center all content */
     body {
       font-family: Arial, sans-serif;
       background-color: #000; /* black background */
       color: #fff;            /* white text */
       margin: 0;
       padding: 0;
-
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       min-height: 100vh; 
       text-align: center;
-      position: relative; /* important if you want absolute-positioned elements inside */
+      position: relative;
     }
 
-    /* Logo styling: absolute position in top-left corner */
     .logo {
       position: absolute;
       top: 10px;
       left: 10px;
-      width: 120px; /* Adjust as needed */
+      width: 120px;
       height: auto;
     }
 
-    /* Headings */
     h1, h2 {
       margin-bottom: 10px;
     }
 
-    /* Container around file-upload elements (optional) */
     .upload-container {
       background-color: #333;
       border: 1px solid #444;
@@ -45,20 +40,17 @@
       margin: 20px auto;
     }
 
-    /* Element spacing */
     .radio-container,
     .slider-container,
     .days-container {
       margin-bottom: 16px;
     }
 
-    /* Slider (range) */
     input[type="range"] {
       width: 300px;
       margin-left: 8px;
     }
 
-    /* Buttons */
     input[type="submit"],
     button {
       background-color: #5c90d2;
@@ -78,18 +70,51 @@
       font-weight: bold;
     }
 
+    /* Main container for the plot and table side by side */
+    .plot-and-table-container {
+      display: flex;
+      flex-direction: row; /* side by side */
+      justify-content: center;
+      align-items: flex-start;
+      margin-top: 20px;
+      gap: 40px; /* space between plot & table */
+    }
+
+    /* The image styling */
+    #plotImage {
+      border: 1px solid #ccc;
+      max-width: 500px;
+      /* keep some margin or something if you like */
+    }
+
+    /* The table container */
+    #dailyTableContainer {
+      max-width: 300px;
+      /* or set a fixed width, etc. */
+      text-align: left;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      color: #fff;
+    }
+    table th,
+    table td {
+      border: 1px solid #444;
+      padding: 6px 8px;
+    }
+
   </style>
 </head>
 <body>
-  <!-- LOGO - top left corner -->
-  <!-- If using Flask's url_for, do: src="{{ url_for('static', filename='images/logo.png') }}" -->
+  <!-- LOGO -->
   <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="logo">
-
-
 
   <h1>Growth Rate Analysis</h1>
 
-  <!-- 1) Temperature -->
+  <!-- Temperature Radio Buttons -->
   <div class="radio-container">
     <p>Select Temperature:</p>
     <label>
@@ -100,46 +125,67 @@
     </label>
   </div>
 
-  <!-- 2) Glucose slider -->
+  <!-- Glucose slider -->
   <div class="slider-container">
     <p>
       Glucose (g/L):
-      <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2" oninput="updatePlot()">
+      <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2" oninput="updatePlot(); updateDailyData();">
       <span id="glucoseValue">1.2</span>
     </p>
   </div>
 
-  <!-- 3) Number of days -->
+  <!-- Number of days -->
   <div class="days-container">
-    <p>Number of Days:
-      <select id="daysDropdown" onchange="updatePlot()">
+    <p>
+      Number of Days:
+      <select id="daysDropdown" onchange="updatePlot(); updateDailyData();">
         <option value="1" selected>1 day</option>
         <option value="2">2 days</option>
         <option value="3">3 days</option>
         <option value="4">4 days</option>
         <option value="5">5 days</option>
+        <option value="7">7 days</option>
+        <option value="10">10 days</option>
       </select>
     </p>
   </div>
 
-  <!-- 4) Initial cell count -->
+  <!-- Initial cell count -->
   <div>
     <p>
       Initial Cell Count:
-      <input type="number" id="initialCountInput" value="1000000" min="1" step="100000" oninput="updatePlot()" />
+      <input type="number" id="initialCountInput" value="1000000" min="1" step="100000" 
+             oninput="updatePlot(); updateDailyData()" />
       <small>(default 1×10^6)</small>
     </p>
   </div>
 
-  <!-- 5) Dynamic Plot -->
-  <img id="plotImage"
-       src="/plot?temp=33&glucose=1.2&days=1&initial_count=1000000"
-       style="border:1px solid #ccc; max-width:80%;"
-       alt="Growth Rate Plot">
+  <!-- Plot & Table side by side -->
+  <div class="plot-and-table-container">
+    <!-- Dynamic Plot -->
+    <img id="plotImage"
+         src="/plot?temp=33&glucose=1.2&days=1&initial_count=1000000"
+         alt="Growth Rate Plot">
 
-  <br><br>
+    <!-- Daily Predictions Table goes here -->
+    <div id="dailyTableContainer">
+      <h3>Daily Predictions</h3>
+      <table id="dailyTable">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Predicted Cells</th>
+            <th>Daily Glucose (g)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-  <!-- 6) Upload file for refined curve fitting (AJAX) -->
+  <!-- Upload File (Optional) -->
   <div class="upload-container">
     <h3>Upload File (Optional)</h3>
     <form id="uploadForm" method="POST" enctype="multipart/form-data">
@@ -160,7 +206,10 @@
     const uploadForm       = document.getElementById('uploadForm');
     const uploadStatus     = document.getElementById('uploadStatus');
 
-    function updatePlot() {
+    // For daily table
+    const dailyTableBody   = document.querySelector('#dailyTable tbody');
+
+    function getSelectedTemperature() {
       let chosenTemp = '33';
       for (const r of tempRadios) {
         if (r.checked) {
@@ -168,9 +217,13 @@
           break;
         }
       }
+      return chosenTemp;
+    }
+
+    function updatePlot() {
+      let chosenTemp = getSelectedTemperature();
       let gVal = glucoseSlider.value;
       glucoseValueSpan.textContent = gVal;
-
       let daysVal = daysDropdown.value;
       let initialCountVal = initialCountElem.value || '1000000';
 
@@ -179,9 +232,64 @@
       plotImage.src = newSrc;
     }
 
-    // Recompute plot if the radio is switched
+    // Build daily predictions table
+    async function updateDailyData() {
+      let chosenTemp = getSelectedTemperature();
+      let gVal       = glucoseSlider.value;
+      let daysVal    = daysDropdown.value;
+      let initVal    = initialCountElem.value || '1000000';
+
+      const url = `/daily_data?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}&initial_count=${initVal}&_=${Date.now()}`;
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          console.error('Error fetching daily data:', resp.statusText);
+          return;
+        }
+        const data = await resp.json();
+        // data is an array of objects: { day, predicted_cells, daily_glucose_needed }
+
+        // Clear old rows
+        dailyTableBody.innerHTML = '';
+
+        // Populate new rows
+        data.forEach(row => {
+          const tr = document.createElement('tr');
+
+          const tdDay = document.createElement('td');
+          tdDay.textContent = row.day;
+          tr.appendChild(tdDay);
+
+          const tdCells = document.createElement('td');
+          // Format the predicted cells with e.g. 2 decimals in scientific notation
+          tdCells.textContent = row.predicted_cells.toExponential(2);
+          tr.appendChild(tdCells);
+
+          const tdGlc = document.createElement('td');
+          // Format the daily glucose needed
+          tdGlc.textContent = row.daily_glucose_needed.toFixed(6);
+          tr.appendChild(tdGlc);
+
+          dailyTableBody.appendChild(tr);
+        });
+
+      } catch (err) {
+        console.error('Error in updateDailyData:', err);
+      }
+    }
+
+    // Recompute both plot and daily table when user changes temp
     tempRadios.forEach(radio => {
-      radio.addEventListener('change', updatePlot);
+      radio.addEventListener('change', () => {
+        updatePlot();
+        updateDailyData();
+      });
+    });
+
+    // On page load, do an initial update
+    window.addEventListener('DOMContentLoaded', () => {
+      updatePlot();
+      updateDailyData();
     });
 
     // AJAX file upload
