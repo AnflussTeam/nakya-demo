@@ -3,110 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Growth Rate Analysis</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #000; /* black background */
-      color: #fff;            /* white text */
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      min-height: 100vh; 
-      text-align: center;
-      position: relative;
-    }
-
-    .logo {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      width: 120px;
-      height: auto;
-    }
-
-    h1, h2 {
-      margin-bottom: 10px;
-    }
-
-    .upload-container {
-      background-color: #333;
-      border: 1px solid #444;
-      padding: 16px;
-      border-radius: 4px;
-      width: 300px;
-      margin: 20px auto;
-    }
-
-    .radio-container,
-    .slider-container,
-    .days-container {
-      margin-bottom: 16px;
-    }
-
-    input[type="range"] {
-      width: 300px;
-      margin-left: 8px;
-    }
-
-    input[type="submit"],
-    button {
-      background-color: #5c90d2;
-      color: #fff;
-      border: none;
-      padding: 8px 14px;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-    input[type="submit"]:hover,
-    button:hover {
-      background-color: #4375ab;
-    }
-
-    #uploadStatus {
-      margin-top: 10px;
-      font-weight: bold;
-    }
-
-    /* Main container for the plot and table side by side */
-    .plot-and-table-container {
-      display: flex;
-      flex-direction: row; /* side by side */
-      justify-content: center;
-      align-items: flex-start;
-      margin-top: 20px;
-      gap: 40px; /* space between plot & table */
-    }
-
-    /* The image styling */
-    #plotImage {
-      border: 1px solid #ccc;
-      max-width: 500px;
-      /* keep some margin or something if you like */
-    }
-
-    /* The table container */
-    #dailyTableContainer {
-      max-width: 300px;
-      /* or set a fixed width, etc. */
-      text-align: left;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      color: #fff;
-    }
-    table th,
-    table td {
-      border: 1px solid #444;
-      padding: 6px 8px;
-    }
-
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <!-- LOGO -->
@@ -133,7 +30,14 @@
       <span id="glucoseValue">1.2</span>
     </p>
   </div>
-
+  <!-- Initial Volume -->
+  <div class="slider-container">
+    <p>
+      Volume (mL):
+      <input type="range" id="volumeSlider" min="1500" max="2500" step="1" value="2000" oninput="updatePlot(); updateDailyData();">
+      <span id="volumeValue">2000</span>
+    </p>
+  </div>
   <!-- Number of days -->
   <div class="days-container">
     <p>
@@ -150,13 +54,12 @@
     </p>
   </div>
 
-  <!-- Initial cell count -->
+  <!-- Initial cell density -->
   <div>
     <p>
-      Initial Cell Count:
-      <input type="number" id="initialCountInput" value="1000000" min="1" step="100000" 
+      Initial Cell Density (cells/mL):
+      <input type="number" id="initialDensityInput" value="300000" min="1" step="100000" 
              oninput="updatePlot(); updateDailyData()" />
-      <small>(default 1×10^6)</small>
     </p>
   </div>
 
@@ -164,7 +67,7 @@
   <div class="plot-and-table-container">
     <!-- Dynamic Plot -->
     <img id="plotImage"
-         src="/plot?temp=33&glucose=1.2&days=1&initial_count=1000000"
+         src="/plot?temp=33&glucose=1.2&days=1&initial_density=300000"
          alt="Growth Rate Plot">
 
     <!-- Daily Predictions Table goes here -->
@@ -174,8 +77,10 @@
         <thead>
           <tr>
             <th>Day</th>
-            <th>Predicted Cells</th>
-            <th>Daily Glucose (g)</th>
+            <th>Predicted Density (cells/mL)</th>
+            <th>Daily Glucose Concentration (g/L)</th>
+            <th>Daily Glucose Need (g)</th>
+            <th>Lactate (mmol/L)</th>
           </tr>
         </thead>
         <tbody>
@@ -201,7 +106,7 @@
     const glucoseSlider    = document.getElementById('glucoseSlider');
     const glucoseValueSpan = document.getElementById('glucoseValue');
     const daysDropdown     = document.getElementById('daysDropdown');
-    const initialCountElem = document.getElementById('initialCountInput');
+    const initialDensityElem = document.getElementById('initialDensityInput');
     const plotImage        = document.getElementById('plotImage');
     const uploadForm       = document.getElementById('uploadForm');
     const uploadStatus     = document.getElementById('uploadStatus');
@@ -225,10 +130,10 @@
       let gVal = glucoseSlider.value;
       glucoseValueSpan.textContent = gVal;
       let daysVal = daysDropdown.value;
-      let initialCountVal = initialCountElem.value || '1000000';
+      let initialDensityVal = initialDensityElem.value || '300000';
 
       // Force fresh image so it won't cache
-      let newSrc = `/plot?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}&initial_count=${initialCountVal}&_=${Date.now()}`;
+      let newSrc = `/plot?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}&initial_density=${initialDensityVal}&_=${Date.now()}`;
       plotImage.src = newSrc;
     }
 
@@ -237,9 +142,10 @@
       let chosenTemp = getSelectedTemperature();
       let gVal       = glucoseSlider.value;
       let daysVal    = daysDropdown.value;
-      let initVal    = initialCountElem.value || '1000000';
+      let initDensityVal = initialDensityElem.value || '300000';
+      let volumeVal  = document.getElementById('volumeSlider').value;
 
-      const url = `/daily_data?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}&initial_count=${initVal}&_=${Date.now()}`;
+      const url = `/daily_data?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}&initial_density=${initDensityVal}&volume=${volumeVal}&_=${Date.now()}`;
       try {
         const resp = await fetch(url);
         if (!resp.ok) {
@@ -247,28 +153,38 @@
           return;
         }
         const data = await resp.json();
-        // data is an array of objects: { day, predicted_cells, daily_glucose_needed }
+        // data is an array of objects: { day, predicted_density, daily_glucose_concentration, daily_glucose_needed, lactate_level }
 
         // Clear old rows
         dailyTableBody.innerHTML = '';
 
         // Populate new rows
-        data.forEach(row => {
+        data.results.forEach(row => {
           const tr = document.createElement('tr');
 
           const tdDay = document.createElement('td');
           tdDay.textContent = row.day;
           tr.appendChild(tdDay);
 
-          const tdCells = document.createElement('td');
-          // Format the predicted cells with e.g. 2 decimals in scientific notation
-          tdCells.textContent = row.predicted_cells.toExponential(2);
-          tr.appendChild(tdCells);
+          const tdDensity = document.createElement('td');
+          // Format the predicted density with e.g. 2 decimals in scientific notation
+          tdDensity.textContent = row.predicted_density.toExponential(2);
+          tr.appendChild(tdDensity);
+
+          const tdGlucoseConcentration = document.createElement('td');
+          // Format the daily glucose concentration
+          tdGlucoseConcentration.textContent = row.daily_glucose_concentration.toFixed(6);
+          tr.appendChild(tdGlucoseConcentration);
 
           const tdGlc = document.createElement('td');
           // Format the daily glucose needed
           tdGlc.textContent = row.daily_glucose_needed.toFixed(6);
           tr.appendChild(tdGlc);
+
+          const tdLactate = document.createElement('td');
+          // Format the lactate level
+          tdLactate.textContent = row.lactate_level.toFixed(6);
+          tr.appendChild(tdLactate);
 
           dailyTableBody.appendChild(tr);
         });
@@ -313,6 +229,27 @@
         uploadStatus.style.color = 'red';
         uploadStatus.textContent = 'Error: ' + error;
       });
+    });
+
+    function updateVolumeValue(value) {
+      document.getElementById('volumeValue').textContent = value;
+    }
+
+    document.getElementById('volumeSlider').addEventListener('input', () => {
+      updateVolumeValue(document.getElementById('volumeSlider').value);
+      updateDailyData();
+    });
+
+    document.getElementById('dataForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      const formData = new FormData(this);
+      const params = new URLSearchParams(formData).toString();
+      fetch(`/daily_data?${params}`)
+          .then(response => response.json())
+          .then(data => {
+              // Handle the response data
+              console.log(data);
+          });
     });
   </script>
 </body>

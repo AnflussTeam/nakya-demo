@@ -39,12 +39,12 @@ def home():
 def plot():
     """
     Returns a PNG image of the Growth Rate vs Glucose, 
-    annotated with final cell count if user has requested multiple days.
+    annotated with final cell density if user has requested multiple days.
     Query params:
       ?temp=33 or ?temp=37
       &glucose=...
       &days=...
-      &initial_count=...
+      &initial_density=...
     """
     temp_str = request.args.get('temp', '33')
     try:
@@ -58,11 +58,19 @@ def plot():
         days = 1.0
 
     try:
-        initial_count = float(request.args.get('initial_count', '1000000'))
+        initial_density = float(request.args.get('initial_density', '300000'))
     except ValueError:
-        initial_count = 1e6
+        initial_density = 3e5
+
+    try:
+        initial_volume = float(request.args.get('volume', '2000'))
+    except ValueError:
+        initial_volume = 2000
 
     hours = days * 24.0
+
+    # Calculate initial cell count
+    initial_count = initial_density * initial_volume
 
     # Evaluate mu from the appropriate fit
     if temp_str == '37':
@@ -72,13 +80,19 @@ def plot():
         scatter_vals = log_func(DEFAULT_GLUCOSE, *params_37)
     else:
         mu = log_func(glucose_val, *params_33)
-        color = 'orange'
+        color = '#BBA14F'
         label = '33°C Fit'
         scatter_vals = log_func(DEFAULT_GLUCOSE, *params_33)
 
     # Compute final cell count with continuous model
     final_cell_count = initial_count * np.exp(mu * hours)
-    daily_glucose_needed = final_cell_count * 1e-8
+    final_cell_density = final_cell_count / initial_volume # Convert volume to liters
+
+    # Fetch daily glucose needed values
+    daily_data_response = daily_data()
+    daily_data_json = daily_data_response.get_json()
+    daily_glucose_needed_values = daily_data_json["daily_glucose_needed_values"]
+    avg_daily_glucose_needed = np.mean(daily_glucose_needed_values)
 
     # PLOT: Growth Rate vs Glucose
     fig, ax = plt.subplots(figsize=(5,4), dpi=100)
@@ -109,9 +123,9 @@ def plot():
         f"Days: {days}\n"
         f"Temp: {temp_str}°C\n"
         f"mu = {mu:.4f} hr^-1\n"
-        f"Initial Count: {initial_count:.2e}\n"
-        f"Final Count: {final_cell_count:.2e}\n"
-        f"Daily Glucose Need: {daily_glucose_needed:.3f} g/day"
+        f"Initial Density: {initial_density:.2e} cells/mL\n"
+        f"Final Density: {final_cell_density:.2e} cells/mL\n"
+        f"Avg Daily Glucose Need: {avg_daily_glucose_needed:.3f} g/day"
     )
     ax.text(0.05, 0.95, info_text, transform=ax.transAxes,
             va='top', ha='left', fontsize=9,
@@ -140,7 +154,8 @@ def daily_data():
       ?temp=...
       &glucose=...
       &days=...
-      &initial_count=...
+      &initial_density=...
+      &volume=...
     """
     temp_str = request.args.get('temp', '33')
     try:
@@ -154,9 +169,17 @@ def daily_data():
         days = 1
 
     try:
-        initial_count = float(request.args.get('initial_count', '1000000'))
+        initial_density = float(request.args.get('initial_density', '300000'))
     except ValueError:
-        initial_count = 1e6
+        initial_density = 3e5
+
+    try:
+        initial_volume = float(request.args.get('volume', '2000'))
+    except ValueError:
+        initial_volume = 2000
+
+    # Calculate initial cell count
+    initial_count = initial_density * initial_volume  # Convert volume to liters
 
     # Evaluate mu from the appropriate fit
     if temp_str == '37':
@@ -175,19 +198,46 @@ def daily_data():
     # Feel free to adjust the formula if you prefer.
 
     results = []
+    daily_glucose_needed_values = []
     X = initial_count
+    glucose_consumption_rate = 24 * 0.2 #pmol/cell/day
+    MW_GLUCOSE = 180
+    VOLUME = initial_volume / 1000 #L
+    glucose_to_lactate_conversion_factor = 0.8
+    remaining_glucose = glucose_val
+    lactate_level = 0
+
+    # Add day 0 entry
+    results.append({
+        "day": 0,
+        "predicted_density": initial_density,
+        "daily_glucose_concentration": remaining_glucose,
+        "daily_glucose_needed": 0,
+        "lactate_level": lactate_level
+    })
+
     for d in range(1, days+1):
         old_X = X
         X = X * daily_growth_factor
         # daily usage is difference in cell number * consumption factor
-        daily_glc_needed = (X - old_X) * 1e-8
+        daily_glc_needed = (X - old_X) * glucose_consumption_rate * 1e-12 * MW_GLUCOSE #g
+        daily_glucose_needed_values.append(daily_glc_needed)
+        remaining_glucose -= daily_glc_needed / VOLUME
+        # add lactate production
+        lactate_level += daily_glc_needed / MW_GLUCOSE * glucose_to_lactate_conversion_factor * 2 * 1000 / VOLUME #mmol/L
+        cell_density = X / (VOLUME*1000)  # Calculate cell density X/mL
         results.append({
             "day": d,
-            "predicted_cells": X,
-            "daily_glucose_needed": daily_glc_needed
+            "predicted_density": cell_density,
+            "daily_glucose_concentration": remaining_glucose,
+            "daily_glucose_needed": daily_glc_needed,
+            "lactate_level": lactate_level
         })
 
-    return jsonify(results)
+    return jsonify({
+        "results": results,
+        "daily_glucose_needed_values": daily_glucose_needed_values
+    })
 
 @app.route('/upload', methods=['POST'])
 def upload():
