@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Growth Rate Analysis</title>
+  <!-- Include your CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -26,18 +27,22 @@
   <div class="slider-container">
     <p>
       Glucose (g/L):
-      <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2" oninput="updatePlot(); updateDailyData();">
+      <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2"
+             oninput="updatePlot(); updateDailyData();">
       <span id="glucoseValue">1.2</span>
     </p>
   </div>
-  <!-- Initial Volume -->
+
+  <!-- Initial Volume slider -->
   <div class="slider-container">
     <p>
       Volume (mL):
-      <input type="range" id="volumeSlider" min="1500" max="2500" step="1" value="2000" oninput="updatePlot(); updateDailyData();">
+      <input type="range" id="volumeSlider" min="1500" max="2500" step="1" value="2000"
+             oninput="updatePlot(); updateDailyData(); updateVolumeValue(this.value);">
       <span id="volumeValue">2000</span>
     </p>
   </div>
+
   <!-- Number of days -->
   <div class="days-container">
     <p>
@@ -70,7 +75,7 @@
          src="/plot?temp=33&glucose=1.2&days=1&initial_density=300000"
          alt="Growth Rate Plot">
 
-    <!-- Daily Predictions Table goes here -->
+    <!-- Daily Predictions Table -->
     <div id="dailyTableContainer">
       <h3>Daily Predictions</h3>
       <table id="dailyTable">
@@ -97,7 +102,27 @@
       <input type="file" name="excel_file" />
       <button type="submit">Submit File</button>
     </form>
+    <!-- Show status/error messages for the upload request -->
     <p id="uploadStatus"></p>
+  </div>
+
+  <!-- Actual Predictions table container -->
+  <div id="actualPredictionsContainer">
+    <h3>Actual Predictions (From Uploaded Data)</h3>
+    <table id="actualPredictionsTable">
+      <thead>
+        <tr>
+          <th>Day</th>
+          <th>Predicted Density (cells/mL)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Populated by JS after file upload -->
+      </tbody>
+    </table>
+    <!-- Show average doubling time and viability here -->
+    <p id="doublingTimeParagraph"></p>
+    <p id="viabilityParagraph"></p>
   </div>
 
   <!-- JavaScript -->
@@ -110,9 +135,15 @@
     const plotImage        = document.getElementById('plotImage');
     const uploadForm       = document.getElementById('uploadForm');
     const uploadStatus     = document.getElementById('uploadStatus');
+    const volumeSlider     = document.getElementById('volumeSlider');
 
     // For daily table
-    const dailyTableBody   = document.querySelector('#dailyTable tbody');
+    const dailyTableBody = document.querySelector('#dailyTable tbody');
+
+    // For actual predictions
+    const actualTableBody = document.querySelector('#actualPredictionsTable tbody');
+    const dtParagraph     = document.getElementById('doublingTimeParagraph');
+    const viabilityParagraph = document.getElementById('viabilityParagraph');
 
     function getSelectedTemperature() {
       let chosenTemp = '33';
@@ -126,26 +157,31 @@
     }
 
     function updatePlot() {
-      let chosenTemp = getSelectedTemperature();
-      let gVal = glucoseSlider.value;
+      const chosenTemp      = getSelectedTemperature();
+      const gVal           = glucoseSlider.value;
+      const daysVal        = daysDropdown.value;
+      const initialDensityVal = initialDensityElem.value || '300000';
+      const volumeVal      = volumeSlider.value;
+
+      // Update the displayed glucose value
       glucoseValueSpan.textContent = gVal;
-      let daysVal = daysDropdown.value;
-      let initialDensityVal = initialDensityElem.value || '300000';
 
       // Force fresh image so it won't cache
-      let newSrc = `/plot?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}&initial_density=${initialDensityVal}&_=${Date.now()}`;
+      const newSrc = `/plot?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}` +
+                     `&initial_density=${initialDensityVal}&volume=${volumeVal}&_=${Date.now()}`;
       plotImage.src = newSrc;
     }
 
-    // Build daily predictions table
     async function updateDailyData() {
-      let chosenTemp = getSelectedTemperature();
-      let gVal       = glucoseSlider.value;
-      let daysVal    = daysDropdown.value;
-      let initDensityVal = initialDensityElem.value || '300000';
-      let volumeVal  = document.getElementById('volumeSlider').value;
+      const chosenTemp = getSelectedTemperature();
+      const gVal       = glucoseSlider.value;
+      const daysVal    = daysDropdown.value;
+      const initDensityVal = initialDensityElem.value || '300000';
+      const volumeVal  = volumeSlider.value;
 
-      const url = `/daily_data?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}&initial_density=${initDensityVal}&volume=${volumeVal}&_=${Date.now()}`;
+      const url = `/daily_data?temp=${chosenTemp}&glucose=${gVal}&days=${daysVal}` +
+                  `&initial_density=${initDensityVal}&volume=${volumeVal}&_=${Date.now()}`;
+
       try {
         const resp = await fetch(url);
         if (!resp.ok) {
@@ -153,7 +189,6 @@
           return;
         }
         const data = await resp.json();
-        // data is an array of objects: { day, predicted_density, daily_glucose_concentration, daily_glucose_needed, lactate_level }
 
         // Clear old rows
         dailyTableBody.innerHTML = '';
@@ -167,32 +202,38 @@
           tr.appendChild(tdDay);
 
           const tdDensity = document.createElement('td');
-          // Format the predicted density with e.g. 2 decimals in scientific notation
           tdDensity.textContent = row.predicted_density.toExponential(2);
           tr.appendChild(tdDensity);
 
           const tdGlucoseConcentration = document.createElement('td');
-          // Format the daily glucose concentration
           tdGlucoseConcentration.textContent = row.daily_glucose_concentration.toFixed(6);
           tr.appendChild(tdGlucoseConcentration);
 
           const tdGlc = document.createElement('td');
-          // Format the daily glucose needed
           tdGlc.textContent = row.daily_glucose_needed.toFixed(6);
           tr.appendChild(tdGlc);
 
           const tdLactate = document.createElement('td');
-          // Format the lactate level
           tdLactate.textContent = row.lactate_level.toFixed(6);
           tr.appendChild(tdLactate);
 
           dailyTableBody.appendChild(tr);
         });
-
       } catch (err) {
         console.error('Error in updateDailyData:', err);
       }
     }
+
+    // On volume slider input, update display and re-fetch data
+    function updateVolumeValue(value) {
+      document.getElementById('volumeValue').textContent = value;
+    }
+
+    volumeSlider.addEventListener('input', () => {
+      updateVolumeValue(volumeSlider.value);
+      updatePlot();
+      updateDailyData();
+    });
 
     // Recompute both plot and daily table when user changes temp
     tempRadios.forEach(radio => {
@@ -217,39 +258,70 @@
         body: formData
       })
       .then(async response => {
-        const message = await response.text();
-        if (response.ok) {
-          uploadStatus.style.color = 'green';
-        } else {
-          uploadStatus.style.color = 'red';
+        const textOrJson = await response.text();
+        let data;
+        try {
+          data = JSON.parse(textOrJson);
+        } catch (err) {
+          // Not valid JSON, show raw text in case of error
+          uploadStatus.style.color = response.ok ? 'green' : 'red';
+          uploadStatus.textContent = textOrJson;
+          return;
         }
-        uploadStatus.textContent = message;
+
+        // If we have valid JSON
+        if (response.ok) {
+          // Show success message
+          uploadStatus.style.color = 'green';
+          uploadStatus.textContent = data.message || "File uploaded successfully!";
+
+          // Clear old actual predictions table rows
+          actualTableBody.innerHTML = '';
+
+          // Show average doubling time
+          if (data.average_doubling_time) {
+            dtParagraph.textContent = 
+              'Average Doubling Time: ' + data.average_doubling_time.toFixed(3) + ' hours';
+          } else {
+            dtParagraph.textContent = '';
+          }
+
+          // Show viability if present
+          if (data.viability !== null && data.viability !== undefined) {
+            viabilityParagraph.textContent = 
+              'Viability: ' + data.viability.toFixed(2) + '%';
+          } else {
+            viabilityParagraph.textContent = '';
+          }
+
+          // Populate the Actual Predictions table
+          if (data.actual_predictions && Array.isArray(data.actual_predictions)) {
+            data.actual_predictions.forEach(row => {
+              const tr = document.createElement('tr');
+
+              const tdDay = document.createElement('td');
+              tdDay.textContent = row.day;
+              tr.appendChild(tdDay);
+
+              const tdDensity = document.createElement('td');
+              // Example: show in scientific notation
+              tdDensity.textContent = Number(row.density).toExponential(2);
+              tr.appendChild(tdDensity);
+
+              actualTableBody.appendChild(tr);
+            });
+          }
+
+        } else {
+          // If not OK, show error in status
+          uploadStatus.style.color = 'red';
+          uploadStatus.textContent = data.message || textOrJson;
+        }
       })
       .catch(error => {
         uploadStatus.style.color = 'red';
         uploadStatus.textContent = 'Error: ' + error;
       });
-    });
-
-    function updateVolumeValue(value) {
-      document.getElementById('volumeValue').textContent = value;
-    }
-
-    document.getElementById('volumeSlider').addEventListener('input', () => {
-      updateVolumeValue(document.getElementById('volumeSlider').value);
-      updateDailyData();
-    });
-
-    document.getElementById('dataForm').addEventListener('submit', function(event) {
-      event.preventDefault();
-      const formData = new FormData(this);
-      const params = new URLSearchParams(formData).toString();
-      fetch(`/daily_data?${params}`)
-          .then(response => response.json())
-          .then(data => {
-              // Handle the response data
-              console.log(data);
-          });
     });
   </script>
 </body>

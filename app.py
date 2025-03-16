@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import io
 import yaml
 from scipy.optimize import curve_fit
-import random
+import math
 
 app = Flask(__name__)
 
@@ -25,26 +25,26 @@ def log_func(x, a, b):
     """Logarithmic growth model: mu = a ln(x) + b."""
     return a * np.log(x) + b
 
+# Fit parameters from your config
 params_37, _ = curve_fit(log_func, DEFAULT_GLUCOSE, MU_37)
 params_33, _ = curve_fit(log_func, DEFAULT_GLUCOSE, MU_33)
 
 @app.route('/', methods=['GET'])
 def home():
-    """
-    Renders the home page (home.html).
-    """
+    """Renders the home page (home.html)."""
     return render_template('home.html')
 
 @app.route('/plot')
 def plot():
     """
-    Returns a PNG image of the Growth Rate vs Glucose, 
+    Returns a PNG image of the Growth Rate vs Glucose,
     annotated with final cell density if user has requested multiple days.
     Query params:
       ?temp=33 or ?temp=37
       &glucose=...
       &days=...
       &initial_density=...
+      &volume=...
     """
     temp_str = request.args.get('temp', '33')
     try:
@@ -68,8 +68,6 @@ def plot():
         initial_volume = 2000
 
     hours = days * 24.0
-
-    # Calculate initial cell count
     initial_count = initial_density * initial_volume
 
     # Evaluate mu from the appropriate fit
@@ -86,7 +84,7 @@ def plot():
 
     # Compute final cell count with continuous model
     final_cell_count = initial_count * np.exp(mu * hours)
-    final_cell_density = final_cell_count / initial_volume # Convert volume to liters
+    final_cell_density = final_cell_count / initial_volume  # cells/mL
 
     # Fetch daily glucose needed values
     daily_data_response = daily_data()
@@ -96,7 +94,6 @@ def plot():
 
     # PLOT: Growth Rate vs Glucose
     fig, ax = plt.subplots(figsize=(5,4), dpi=100)
-
     x_vals = np.linspace(DEFAULT_GLUCOSE.min(), DEFAULT_GLUCOSE.max(), 100)
     if temp_str == '37':
         y_fit = log_func(x_vals, *params_37)
@@ -133,7 +130,6 @@ def plot():
 
     plt.tight_layout()
 
-    # Return as PNG
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     plt.close(fig)
@@ -143,19 +139,8 @@ def plot():
 @app.route('/daily_data')
 def daily_data():
     """
-    Returns JSON with daily predictions for the selected parameters.
-    We'll do a discrete daily approach:
-      X_{i} = X_{i-1} * exp(mu * 24)  (if you want to tie to log_func)
-    or
-      X_{i} = X_{i-1} * (1 + daily_sgr)
-    and also compute daily glucose required.
-
-    Query params:
-      ?temp=...
-      &glucose=...
-      &days=...
-      &initial_density=...
-      &volume=...
+    Returns JSON with daily predictions for the selected parameters,
+    using the log_func and fitted parameters for growth.
     """
     temp_str = request.args.get('temp', '33')
     try:
@@ -178,8 +163,7 @@ def daily_data():
     except ValueError:
         initial_volume = 2000
 
-    # Calculate initial cell count
-    initial_count = initial_density * initial_volume  # Convert volume to liters
+    initial_count = initial_density * initial_volume
 
     # Evaluate mu from the appropriate fit
     if temp_str == '37':
@@ -187,27 +171,19 @@ def daily_data():
     else:
         mu = log_func(glucose_val, *params_33)
 
-    # Option 1: tie daily growth to the hourly mu from log_func
-    #   => daily growth factor = exp(mu * 24)
     daily_growth_factor = np.exp(mu * 24)
-
-    # We'll produce daily predictions in a table:
-    # For day=1..days, X[day] = X[day-1] * daily_growth_factor
-    # We'll also compute daily glucose usage as
-    #   daily_glc = (X[day] - X[day-1]) * (1e-8)   (for instance)
-    # Feel free to adjust the formula if you prefer.
 
     results = []
     daily_glucose_needed_values = []
     X = initial_count
-    glucose_consumption_rate = 24 * 0.2 #pmol/cell/day
+    glucose_consumption_rate = 24 * 0.2  # pmol/cell/day
     MW_GLUCOSE = 180
-    VOLUME = initial_volume / 1000 #L
+    VOLUME = initial_volume / 1000  # Convert mL to L
     glucose_to_lactate_conversion_factor = 0.8
-    remaining_glucose = glucose_val
     lactate_level = 0
+    remaining_glucose = glucose_val
 
-    # Add day 0 entry
+    # Day 0 entry
     results.append({
         "day": 0,
         "predicted_density": initial_density,
@@ -219,13 +195,15 @@ def daily_data():
     for d in range(1, days+1):
         old_X = X
         X = X * daily_growth_factor
-        # daily usage is difference in cell number * consumption factor
-        daily_glc_needed = (X - old_X) * glucose_consumption_rate * 1e-12 * MW_GLUCOSE #g
+        # daily glucose usage
+        daily_glc_needed = (X - old_X) * glucose_consumption_rate * 1e-12 * MW_GLUCOSE
         daily_glucose_needed_values.append(daily_glc_needed)
+
         remaining_glucose -= daily_glc_needed / VOLUME
-        # add lactate production
-        lactate_level += daily_glc_needed / MW_GLUCOSE * glucose_to_lactate_conversion_factor * 2 * 1000 / VOLUME #mmol/L
-        cell_density = X / (VOLUME*1000)  # Calculate cell density X/mL
+        # add lactate
+        lactate_level += (daily_glc_needed / MW_GLUCOSE) * glucose_to_lactate_conversion_factor * 2 * 1000 / VOLUME
+        cell_density = X / (VOLUME * 1000)  # X per mL
+
         results.append({
             "day": d,
             "predicted_density": cell_density,
@@ -239,23 +217,112 @@ def daily_data():
         "daily_glucose_needed_values": daily_glucose_needed_values
     })
 
+############################
+# NEW CODE FOR UPLOAD + Actual Predictions
+############################
+def compute_average_doubling_time(df):
+    """
+    Given a DataFrame with columns for Time and CellDensity,
+    compute the consecutive growth rates and return the average doubling time.
+    Also compute viability if 'LiveCells' and 'TotalCells' exist.
+    """
+    # Ensure time is sorted
+    df = df.sort_values(by='Time')
+
+    # Consecutive growth rates
+    mus = []
+    for i in range(len(df) - 1):
+        t1 = df.iloc[i]['Time']
+        t2 = df.iloc[i+1]['Time']
+        x1 = df.iloc[i]['CellDensity']
+        x2 = df.iloc[i+1]['CellDensity']
+
+        # Avoid any zero or negative densities
+        if x1 <= 0 or x2 <= 0 or (t2 == t1):
+            continue
+
+        mu = (math.log(x2) - math.log(x1)) / (t2 - t1)  # hr^-1 if Time is in hours
+        mus.append(mu)
+
+    avg_mu = np.mean(mus) if len(mus) > 0 else 0
+    if avg_mu <= 0:
+        avg_doubling_time = None
+    else:
+        avg_doubling_time = math.log(2) / avg_mu
+
+    # If the file has LiveCells and TotalCells, compute viability
+    viability = None
+    if {'LiveCells', 'TotalCells'}.issubset(df.columns):
+        # For demonstration, just compute final viability or average viability:
+        # viability = (LiveCells / TotalCells) * 100
+        viability = (
+            (df['LiveCells'].sum() / df['TotalCells'].sum()) * 100
+            if df['TotalCells'].sum() > 0 else None
+        )
+
+    return avg_doubling_time, viability
+
 @app.route('/upload', methods=['POST'])
 def upload():
     """
-    AJAX endpoint to read the file, ensuring it's valid.
-    Return a success message WITHOUT redirecting.
+    Upload Excel, parse time and cell density,
+    compute average doubling time & produce an "actual predictions" table.
+    Return JSON so the frontend can display it.
     """
     excel_file = request.files.get('excel_file')
     if not excel_file:
         return "No file chosen. Please select a file.", 400
 
-    # Just read it to confirm it's valid; not used further.
     try:
+        # Read the file into a DataFrame
         df = pd.read_excel(excel_file)
-    except Exception as e:
-        return f"Error reading file: {e}", 400
 
-    return "File submitted successfully!", 200
+        # We assume the file has columns 'Time' and 'CellDensity'.
+        # If your column names differ, rename them or adjust accordingly.
+        required_cols = {'Time', 'CellDensity'}
+        if not required_cols.issubset(df.columns):
+            return "Excel file must contain 'Time' and 'CellDensity' columns.", 400
+
+        avg_td, viability = compute_average_doubling_time(df)
+        if avg_td is None:
+            return jsonify({
+                "message": "Could not compute doubling time (check data).",
+                "actual_predictions": []
+            })
+
+        # Now generate a day-by-day "Actual Predictions" using the observed doubling time.
+        # For example, if doubling time is in hours, then daily growth factor = 2^(24/td).
+        daily_growth_factor = 2 ** (24 / avg_td)
+
+        # Suppose we just take the initial cell density from the first row of the data:
+        initial_density = df.iloc[0]['CellDensity']
+        # We'll simulate for as many days as we want (e.g., 5):
+        num_days = 5
+
+        actual_results = []
+        X = initial_density
+        actual_results.append({
+            "day": 0,
+            "density": X
+        })
+        for d in range(1, num_days + 1):
+            X = X * daily_growth_factor
+            actual_results.append({
+                "day": d,
+                "density": X
+            })
+
+        # Build the response
+        response_data = {
+            "message": "File submitted successfully!",
+            "average_doubling_time": avg_td,
+            "viability": viability,
+            "actual_predictions": actual_results
+        }
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        return f"Error reading or processing file: {e}", 400
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
