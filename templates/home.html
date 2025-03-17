@@ -140,6 +140,7 @@
               <th>Daily Glucose Concentration (g/L)</th>
               <th>Daily Glucose Need (g)</th>
               <th>Lactate (mmol/L)</th>
+              <th>pH</th>
             </tr>
           </thead>
           <tbody>
@@ -273,6 +274,10 @@
           const tdLactate = document.createElement('td');
           tdLactate.textContent = row.lactate_level.toFixed(6);
           tr.appendChild(tdLactate);
+
+          const tdPH = document.createElement('td');
+          tdPH.textContent = row.pH.toFixed(2);
+          tr.appendChild(tdPH);
 
           dailyTableBody.appendChild(tr);
         });

@@ -120,6 +120,7 @@ def plot():
         f"Days: {days}\n"
         f"Temp: {temp_str}°C\n"
         f"mu = {mu:.4f} hr^-1\n"
+        f"Expected Doubling Time: {math.log(2) / mu:.2f} hr\n"
         f"Initial Density: {initial_density:.2e} cells/mL\n"
         f"Final Density: {final_cell_density:.2e} cells/mL\n"
         f"Avg Daily Glucose Need: {avg_daily_glucose_needed:.3f} g/day"
@@ -183,13 +184,18 @@ def daily_data():
     lactate_level = 0
     remaining_glucose = glucose_val
 
+    # pH parameters
+    pH_initial = 7.2
+    alpha = 0.015  # Empirical factor
+
     # Day 0 entry
     results.append({
         "day": 0,
         "predicted_density": initial_density,
         "daily_glucose_concentration": remaining_glucose,
         "daily_glucose_needed": 0,
-        "lactate_level": lactate_level
+        "lactate_level": lactate_level,
+        "pH": pH_initial
     })
 
     for d in range(1, days+1):
@@ -204,12 +210,16 @@ def daily_data():
         lactate_level += (daily_glc_needed / MW_GLUCOSE) * glucose_to_lactate_conversion_factor * 2 * 1000 / VOLUME
         cell_density = X / (VOLUME * 1000)  # X per mL
 
+        # Calculate pH
+        pH = pH_initial - alpha * lactate_level
+
         results.append({
             "day": d,
             "predicted_density": cell_density,
             "daily_glucose_concentration": remaining_glucose,
             "daily_glucose_needed": daily_glc_needed,
-            "lactate_level": lactate_level
+            "lactate_level": lactate_level,
+            "pH": pH
         })
 
     return jsonify({
