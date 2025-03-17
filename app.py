@@ -258,7 +258,7 @@ def compute_average_doubling_time(df):
     if avg_mu <= 0:
         avg_doubling_time = None
     else:
-        avg_doubling_time = math.log(2) / avg_mu
+        avg_doubling_time = math.log(2) / avg_mu * 24  # Convert to hours
 
     # If the file has LiveCells and TotalCells, compute viability
     viability = None
