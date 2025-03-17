@@ -227,15 +227,15 @@ def compute_average_doubling_time(df):
     Also compute viability if 'LiveCells' and 'TotalCells' exist.
     """
     # Ensure time is sorted
-    df = df.sort_values(by='Time')
+    df = df.sort_values(by='day')
 
     # Consecutive growth rates
     mus = []
     for i in range(len(df) - 1):
-        t1 = df.iloc[i]['Time']
-        t2 = df.iloc[i+1]['Time']
-        x1 = df.iloc[i]['CellDensity']
-        x2 = df.iloc[i+1]['CellDensity']
+        t1 = df.iloc[i]['day']
+        t2 = df.iloc[i+1]['day']
+        x1 = df.iloc[i]['actual_density']
+        x2 = df.iloc[i+1]['actual_density']
 
         # Avoid any zero or negative densities
         if x1 <= 0 or x2 <= 0 or (t2 == t1):
@@ -253,14 +253,12 @@ def compute_average_doubling_time(df):
     # If the file has LiveCells and TotalCells, compute viability
     viability = None
     if {'LiveCells', 'TotalCells'}.issubset(df.columns):
-        # For demonstration, just compute final viability or average viability:
-        # viability = (LiveCells / TotalCells) * 100
         viability = (
             (df['LiveCells'].sum() / df['TotalCells'].sum()) * 100
             if df['TotalCells'].sum() > 0 else None
         )
 
-    return avg_doubling_time, viability
+    return avg_doubling_time, viability, df['actual_density'].tolist(), avg_mu
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -283,33 +281,35 @@ def upload():
         if not required_cols.issubset(df.columns):
             return "Excel file must contain 'Time' and 'CellDensity' columns.", 400
 
-        avg_td, viability = compute_average_doubling_time(df)
+        avg_td, viability, actual_densities, avg_mu = compute_average_doubling_time(df)
         if avg_td is None:
             return jsonify({
                 "message": "Could not compute doubling time (check data).",
                 "actual_predictions": []
             })
 
+        # Get the number of days from the form data
+        num_days = int(request.form.get('days', '5'))
+
         # Now generate a day-by-day "Actual Predictions" using the observed doubling time.
-        # For example, if doubling time is in hours, then daily growth factor = 2^(24/td).
-        daily_growth_factor = 2 ** (24 / avg_td)
+        daily_growth_factor = np.exp(avg_mu)
 
         # Suppose we just take the initial cell density from the first row of the data:
         initial_density = df.iloc[0]['CellDensity']
-        # We'll simulate for as many days as we want (e.g., 5):
-        num_days = 5
 
         actual_results = []
         X = initial_density
         actual_results.append({
             "day": 0,
-            "density": X
+            "actual_density": actual_densities[0],
+            "predicted_density": X
         })
         for d in range(1, num_days + 1):
             X = X * daily_growth_factor
             actual_results.append({
                 "day": d,
-                "density": X
+                "actual_density": actual_densities[d] if d < len(actual_densities) else None,
+                "predicted_density": X
             })
 
         # Build the response
@@ -323,6 +323,62 @@ def upload():
 
     except Exception as e:
         return f"Error reading or processing file: {e}", 400
+
+@app.route('/submit_observed_data', methods=['POST'])
+def submit_observed_data():
+    """
+    Handle the submission of observed data and recalculate avg_mu and doubling time.
+    """
+    try:
+        observed_data = request.json.get('observed_data', [])
+        if not observed_data:
+            return jsonify({"message": "No observed data provided."}), 400
+
+        # Convert observed data to DataFrame
+        df = pd.DataFrame(observed_data)
+
+        # Ensure the DataFrame has the required columns
+        required_cols = {'day', 'actual_density'}
+        if not required_cols.issubset(df.columns):
+            return jsonify({"message": "Observed data must contain 'day' and 'actual_density' columns."}), 400
+
+        # Compute average doubling time and viability
+        avg_td, viability, actual_densities, avg_mu = compute_average_doubling_time(df)
+        if avg_td is None:
+            return jsonify({
+                "message": "Could not compute doubling time (check data).",
+                "actual_predictions": []
+            })
+
+        # Get the number of days from the observed data
+        num_days = int(request.form.get('days', '5'))
+
+        # Now generate a day-by-day "Actual Predictions" using the observed doubling time.
+        daily_growth_factor = np.exp(avg_mu)
+
+        actual_results = []
+        for d in range(num_days + 1):
+            if d < len(actual_densities):
+                X = actual_densities[d]
+            else:
+                X = actual_results[-1]['predicted_density'] * daily_growth_factor
+            actual_results.append({
+                "day": d,
+                "actual_density": actual_densities[d] if d < len(actual_densities) else None,
+                "predicted_density": X
+            })
+
+        # Build the response
+        response_data = {
+            "message": "Observed data submitted successfully!",
+            "average_doubling_time": avg_td,
+            "viability": viability,
+            "actual_predictions": actual_results
+        }
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        return jsonify({"message": f"Error processing observed data: {e}"}), 400
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)

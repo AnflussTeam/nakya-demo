@@ -5,98 +5,173 @@
   <title>Growth Rate Analysis</title>
   <!-- Include your CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    .parameters-graph-container {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 1200px;
+      margin-bottom: 20px;
+    }
+    .parameters, .graph {
+      background-color: rgba(255, 255, 255, 0.1);
+      padding: 20px;
+      border-radius: 8px;
+      width: 48%;
+    }
+    .tables-container {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 1200px;
+    }
+    .table-container {
+      background-color: rgba(255, 255, 255, 0.1);
+      padding: 20px;
+      border-radius: 8px;
+      width: 48%;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    td {
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+  </style>
 </head>
 <body>
-  <!-- LOGO -->
-  <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="logo">
+  <div class="container">
+    <div class="parameters-graph-container">
+      <div class="parameters">
+        <h2>Initial Parameters</h2>
+        <!-- Temperature Radio Buttons -->
+        <div class="radio-container">
+          <p>Select Temperature:</p>
+          <label>
+            <input type="radio" name="tempRadio" value="33" checked> 33°C
+          </label>
+          <label style="margin-left:1em;">
+            <input type="radio" name="tempRadio" value="37"> 37°C
+          </label>
+        </div>
 
-  <h1>Growth Rate Analysis</h1>
+        <!-- Glucose slider -->
+        <div class="slider-container">
+          <p>
+            Glucose (g/L):
+            <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2"
+                   oninput="updatePlot(); updateDailyData();">
+            <span id="glucoseValue">1.2</span>
+          </p>
+        </div>
 
-  <!-- Temperature Radio Buttons -->
-  <div class="radio-container">
-    <p>Select Temperature:</p>
-    <label>
-      <input type="radio" name="tempRadio" value="33" checked> 33°C
-    </label>
-    <label style="margin-left:1em;">
-      <input type="radio" name="tempRadio" value="37"> 37°C
-    </label>
-  </div>
+        <!-- Initial Volume slider -->
+        <div class="slider-container">
+          <p>
+            Volume (mL):
+            <input type="range" id="volumeSlider" min="1500" max="2500" step="1" value="2000"
+                   oninput="updatePlot(); updateDailyData(); updateVolumeValue(this.value);">
+            <span id="volumeValue">2000</span>
+          </p>
+        </div>
 
-  <!-- Glucose slider -->
-  <div class="slider-container">
-    <p>
-      Glucose (g/L):
-      <input type="range" id="glucoseSlider" min="1.2" max="4.8" step="0.01" value="1.2"
-             oninput="updatePlot(); updateDailyData();">
-      <span id="glucoseValue">1.2</span>
-    </p>
-  </div>
+        <!-- Number of days -->
+        <div class="days-container">
+          <p>
+            Number of Days:
+            <select id="daysDropdown" onchange="updatePlot(); updateDailyData(); updateObservedTable();">
+              <option value="1" selected>1 day</option>
+              <option value="2">2 days</option>
+              <option value="3">3 days</option>
+              <option value="4">4 days</option>
+              <option value="5">5 days</option>
+              <option value="7">7 days</option>
+              <option value="10">10 days</option>
+            </select>
+          </p>
+        </div>
 
-  <!-- Initial Volume slider -->
-  <div class="slider-container">
-    <p>
-      Volume (mL):
-      <input type="range" id="volumeSlider" min="1500" max="2500" step="1" value="2000"
-             oninput="updatePlot(); updateDailyData(); updateVolumeValue(this.value);">
-      <span id="volumeValue">2000</span>
-    </p>
-  </div>
+        <!-- Initial cell density -->
+        <div>
+          <p>
+            Initial Cell Density (cells/mL):
+            <input type="number" id="initialDensityInput" value="300000" min="1" step="100000" 
+                   oninput="updatePlot(); updateDailyData()" />
+          </p>
+        </div>
+      </div>
 
-  <!-- Number of days -->
-  <div class="days-container">
-    <p>
-      Number of Days:
-      <select id="daysDropdown" onchange="updatePlot(); updateDailyData();">
-        <option value="1" selected>1 day</option>
-        <option value="2">2 days</option>
-        <option value="3">3 days</option>
-        <option value="4">4 days</option>
-        <option value="5">5 days</option>
-        <option value="7">7 days</option>
-        <option value="10">10 days</option>
-      </select>
-    </p>
-  </div>
+      <div class="graph">
+        <h2>Growth Rate Plot</h2>
+        <img id="plotImage"
+             src="/plot?temp=33&glucose=1.2&days=1&initial_density=300000"
+             alt="Growth Rate Plot">
+      </div>
+    </div>
 
-  <!-- Initial cell density -->
-  <div>
-    <p>
-      Initial Cell Density (cells/mL):
-      <input type="number" id="initialDensityInput" value="300000" min="1" step="100000" 
-             oninput="updatePlot(); updateDailyData()" />
-    </p>
-  </div>
+    <div class="tables-container">
+      <div class="table-container">
+        <h3>Daily Predictions</h3>
+        <table id="dailyTable">
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Predicted Density (cells/mL)</th>
+              <th>Daily Glucose Concentration (g/L)</th>
+              <th>Daily Glucose Need (g)</th>
+              <th>Lactate (mmol/L)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
 
-  <!-- Plot & Table side by side -->
-  <div class="plot-and-table-container">
-    <!-- Dynamic Plot -->
-    <img id="plotImage"
-         src="/plot?temp=33&glucose=1.2&days=1&initial_density=300000"
-         alt="Growth Rate Plot">
-
-    <!-- Daily Predictions Table -->
-    <div id="dailyTableContainer">
-      <h3>Daily Predictions</h3>
-      <table id="dailyTable">
-        <thead>
-          <tr>
-            <th>Day</th>
-            <th>Predicted Density (cells/mL)</th>
-            <th>Daily Glucose Concentration (g/L)</th>
-            <th>Daily Glucose Need (g)</th>
-            <th>Lactate (mmol/L)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- Populated by JS -->
-        </tbody>
-      </table>
+      <div class="table-container">
+        <h3>Observed Data</h3>
+        <table id="actualPredictionsTable">
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Observed Density (cells/mL)</th>
+              <th>Adjusted Predicted Density (cells/mL)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+        <!-- Show average doubling time and viability here -->
+        <p id="doublingTimeParagraph"></p>
+        <p id="viabilityParagraph"></p>
+        <button id="submitObservedData">Submit Observed Data</button>
+      </div>
     </div>
   </div>
 
   <!-- Upload File (Optional) -->
-  <div class="upload-container">
+  <div class="upload-container" style="padding: 20px;">
     <h3>Upload File (Optional)</h3>
     <form id="uploadForm" method="POST" enctype="multipart/form-data">
       <input type="file" name="excel_file" />
@@ -104,25 +179,6 @@
     </form>
     <!-- Show status/error messages for the upload request -->
     <p id="uploadStatus"></p>
-  </div>
-
-  <!-- Actual Predictions table container -->
-  <div id="actualPredictionsContainer">
-    <h3>Actual Predictions (From Uploaded Data)</h3>
-    <table id="actualPredictionsTable">
-      <thead>
-        <tr>
-          <th>Day</th>
-          <th>Predicted Density (cells/mL)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Populated by JS after file upload -->
-      </tbody>
-    </table>
-    <!-- Show average doubling time and viability here -->
-    <p id="doublingTimeParagraph"></p>
-    <p id="viabilityParagraph"></p>
   </div>
 
   <!-- JavaScript -->
@@ -144,6 +200,7 @@
     const actualTableBody = document.querySelector('#actualPredictionsTable tbody');
     const dtParagraph     = document.getElementById('doublingTimeParagraph');
     const viabilityParagraph = document.getElementById('viabilityParagraph');
+    const submitObservedDataButton = document.getElementById('submitObservedData');
 
     function getSelectedTemperature() {
       let chosenTemp = '33';
@@ -219,9 +276,98 @@
 
           dailyTableBody.appendChild(tr);
         });
+
+        // Update the observed table to match the number of days
+        updateObservedTable();
+
       } catch (err) {
         console.error('Error in updateDailyData:', err);
       }
+    }
+
+    function updateObservedTable() {
+      const daysVal = parseInt(daysDropdown.value, 10);
+      actualTableBody.innerHTML = '';
+
+      for (let d = 0; d <= daysVal; d++) {
+        const tr = document.createElement('tr');
+
+        const tdDay = document.createElement('td');
+        tdDay.textContent = d;
+        tr.appendChild(tdDay);
+
+        const tdActualDensity = document.createElement('td');
+        tdActualDensity.contentEditable = true; // Make the cell editable
+        tdActualDensity.textContent = 'N/A';
+        tdActualDensity.addEventListener('input', handleObservedDataInput);
+        tr.appendChild(tdActualDensity);
+
+        const tdPredictedDensity = document.createElement('td');
+        tdPredictedDensity.textContent = 'N/A';
+        tr.appendChild(tdPredictedDensity);
+
+        actualTableBody.appendChild(tr);
+      }
+    }
+
+    function handleObservedDataInput() {
+      const observedData = [];
+      const rows = actualTableBody.querySelectorAll('tr');
+      rows.forEach(row => {
+        const day = row.cells[0].textContent;
+        const actualDensity = row.cells[1].textContent;
+        if (actualDensity !== 'N/A' && actualDensity !== '') {
+          observedData.push({
+            day: parseInt(day, 10),
+            actual_density: parseFloat(actualDensity)
+          });
+        }
+      });
+
+      if (observedData.length >= 2) {
+        submitObservedData(observedData);
+      }
+    }
+
+    function submitObservedData(observedData) {
+      fetch('/submit_observed_data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ observed_data: observedData })
+      })
+      .then(async response => {
+        const data = await response.json();
+        if (response.ok) {
+          // Update the table with new predicted densities
+          const rows = actualTableBody.querySelectorAll('tr');
+          data.actual_predictions.forEach((row, index) => {
+            const tr = rows[index];
+            tr.cells[2].textContent = row.predicted_density.toExponential(2);
+          });
+
+          // Update average doubling time and viability
+          if (data.average_doubling_time) {
+            dtParagraph.textContent = 
+              'Average Doubling Time: ' + data.average_doubling_time.toFixed(3) + ' days';
+          } else {
+            dtParagraph.textContent = '';
+          }
+
+          if (data.viability !== null && data.viability !== undefined) {
+            viabilityParagraph.textContent = 
+              'Viability: ' + data.viability.toFixed(2) + '%';
+          } else {
+            viabilityParagraph.textContent = '';
+          }
+        } else {
+          console.error('Error submitting observed data:', data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error submitting observed data:', error);
+      });
     }
 
     // On volume slider input, update display and re-fetch data
@@ -240,6 +386,7 @@
       radio.addEventListener('change', () => {
         updatePlot();
         updateDailyData();
+        updateObservedTable();
       });
     });
 
@@ -247,12 +394,14 @@
     window.addEventListener('DOMContentLoaded', () => {
       updatePlot();
       updateDailyData();
+      updateObservedTable();
     });
 
     // AJAX file upload
     uploadForm.addEventListener('submit', function(event) {
       event.preventDefault();
       const formData = new FormData(uploadForm);
+      formData.append('days', daysDropdown.value); // Add the number of days to the form data
       fetch('/upload', {
         method: 'POST',
         body: formData
@@ -281,7 +430,7 @@
           // Show average doubling time
           if (data.average_doubling_time) {
             dtParagraph.textContent = 
-              'Average Doubling Time: ' + data.average_doubling_time.toFixed(3) + ' hours';
+              'Average Doubling Time: ' + data.average_doubling_time.toFixed(3) + ' days';
           } else {
             dtParagraph.textContent = '';
           }
@@ -303,10 +452,15 @@
               tdDay.textContent = row.day;
               tr.appendChild(tdDay);
 
-              const tdDensity = document.createElement('td');
-              // Example: show in scientific notation
-              tdDensity.textContent = Number(row.density).toExponential(2);
-              tr.appendChild(tdDensity);
+              const tdActualDensity = document.createElement('td');
+              tdActualDensity.contentEditable = true; // Make the cell editable
+              tdActualDensity.textContent = row.actual_density ? row.actual_density.toExponential(2) : 'N/A';
+              tdActualDensity.addEventListener('input', handleObservedDataInput);
+              tr.appendChild(tdActualDensity);
+
+              const tdPredictedDensity = document.createElement('td');
+              tdPredictedDensity.textContent = row.predicted_density.toExponential(2);
+              tr.appendChild(tdPredictedDensity);
 
               actualTableBody.appendChild(tr);
             });
@@ -321,6 +475,60 @@
       .catch(error => {
         uploadStatus.style.color = 'red';
         uploadStatus.textContent = 'Error: ' + error;
+      });
+    });
+
+    // Submit observed data
+    submitObservedDataButton.addEventListener('click', function() {
+      const observedData = [];
+      const rows = actualTableBody.querySelectorAll('tr');
+      rows.forEach(row => {
+        const day = row.cells[0].textContent;
+        const actualDensity = row.cells[1].textContent;
+        if (actualDensity !== 'N/A') {
+          observedData.push({
+            day: parseInt(day, 10),
+            actual_density: parseFloat(actualDensity)
+          });
+        }
+      });
+
+      fetch('/submit_observed_data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ observed_data: observedData })
+      })
+      .then(async response => {
+        const data = await response.json();
+        if (response.ok) {
+          // Update the table with new predicted densities
+          data.actual_predictions.forEach((row, index) => {
+            const tr = rows[index];
+            tr.cells[2].textContent = row.predicted_density.toExponential(2);
+          });
+
+          // Update average doubling time and viability
+          if (data.average_doubling_time) {
+            dtParagraph.textContent = 
+              'Average Doubling Time: ' + data.average_doubling_time.toFixed(3) + ' days';
+          } else {
+            dtParagraph.textContent = '';
+          }
+
+          if (data.viability !== null && data.viability !== undefined) {
+            viabilityParagraph.textContent = 
+              'Viability: ' + data.viability.toFixed(2) + '%';
+          } else {
+            viabilityParagraph.textContent = '';
+          }
+        } else {
+          console.error('Error submitting observed data:', data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error submitting observed data:', error);
       });
     });
   </script>
