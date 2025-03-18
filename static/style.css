@@ -146,3 +146,26 @@ table td {
 table th {
   background-color: #BBA14F;
 }
+
+/* Editable cell styling */
+.editable-cell {
+  position: relative;
+  cursor: text;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.editable-cell:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.editable-cell:focus {
+  background-color: rgba(255, 255, 255, 0.2);
+  outline: none;
+  color: #ffffff;
+}
+
+/* Style for the placeholder dash */
+.editable-cell:empty::before {
+  content: '-';
+  color: rgba(255, 255, 255, 0.4);
+}

@@ -157,6 +157,10 @@
               <th>Day</th>
               <th>Observed Density (cells/mL)</th>
               <th>Adjusted Predicted Density (cells/mL)</th>
+              <th>Glucose Concentration (g/L)</th>
+              <th>Glucose Added (g)</th>
+              <th>Lactate (mmol/L)</th>
+              <th>pH</th>
             </tr>
           </thead>
           <tbody>
@@ -297,19 +301,51 @@
       for (let d = 0; d <= daysVal; d++) {
         const tr = document.createElement('tr');
 
+        // Day
         const tdDay = document.createElement('td');
         tdDay.textContent = d;
         tr.appendChild(tdDay);
 
+        // Observed Density - editable
         const tdActualDensity = document.createElement('td');
-        tdActualDensity.contentEditable = true; // Make the cell editable
-        tdActualDensity.textContent = 'N/A';
+        tdActualDensity.contentEditable = true; 
+        tdActualDensity.textContent = '-';
+        tdActualDensity.classList.add('editable-cell');
         tdActualDensity.addEventListener('input', handleObservedDataInput);
         tr.appendChild(tdActualDensity);
 
+        // Adjusted Predicted Density - read-only
         const tdPredictedDensity = document.createElement('td');
-        tdPredictedDensity.textContent = 'N/A';
+        tdPredictedDensity.textContent = '-';
         tr.appendChild(tdPredictedDensity);
+
+        // Glucose Concentration - editable
+        const tdGlucoseConc = document.createElement('td');
+        tdGlucoseConc.contentEditable = true;
+        tdGlucoseConc.textContent = '-';
+        tdGlucoseConc.classList.add('editable-cell');
+        tr.appendChild(tdGlucoseConc);
+        
+        // Glucose Added - editable
+        const tdGlucoseAdded = document.createElement('td');
+        tdGlucoseAdded.contentEditable = true;
+        tdGlucoseAdded.textContent = '-';
+        tdGlucoseAdded.classList.add('editable-cell');
+        tr.appendChild(tdGlucoseAdded);
+        
+        // Lactate - editable
+        const tdLactate = document.createElement('td');
+        tdLactate.contentEditable = true;
+        tdLactate.textContent = '-';
+        tdLactate.classList.add('editable-cell');
+        tr.appendChild(tdLactate);
+        
+        // pH - editable
+        const tdPH = document.createElement('td');
+        tdPH.contentEditable = true;
+        tdPH.textContent = '-';
+        tdPH.classList.add('editable-cell');
+        tr.appendChild(tdPH);
 
         actualTableBody.appendChild(tr);
       }
